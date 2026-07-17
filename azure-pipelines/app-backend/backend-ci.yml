@@ -1,0 +1,98 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - backend/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  nodeVersion: '20.x'
+  sshServiceConnection: 'prod-vm-ssh'
+
+stages:
+
+#=========================================
+# BUILD
+#=========================================
+
+- stage: Build
+  displayName: Build Backend
+
+  jobs:
+
+  - job: Build
+
+    steps:
+
+    - checkout: self
+
+    - task: NodeTool@0
+      displayName: Install NodeJS
+      inputs:
+        versionSpec: $(nodeVersion)
+
+    - script: |
+        cd backend
+        npm ci
+      displayName: Install Dependencies
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish Backend Artifact
+      inputs:
+        PathtoPublish: backend
+        ArtifactName: backend-artifact
+
+
+#=========================================
+# DEPLOY
+#=========================================
+
+- stage: Deploy
+
+  dependsOn: Build
+
+  jobs:
+
+  - deployment: DeployBackend
+
+    environment: Production
+
+    strategy:
+
+      runOnce:
+
+        deploy:
+
+          steps:
+
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              artifactName: backend-artifact
+              downloadPath: $(Pipeline.Workspace)
+
+          - task: CopyFilesOverSSH@0
+            displayName: Copy Backend
+            inputs:
+              sshEndpoint: $(sshServiceConnection)
+              sourceFolder: $(Pipeline.Workspace)/backend-artifact
+              targetFolder: /home/azureuser/devops-interview-lab/backend
+
+          - task: SSH@0
+            displayName: Deploy Backend
+            inputs:
+              sshEndpoint: $(sshServiceConnection)
+              runOptions: inline
+              inline: |
+                cd /home/azureuser/devops-interview-lab/backend
+
+                npm install
+
+                pm2 restart backend || pm2 start app.js --name backend
+
+                pm2 save
+
+                curl http://localhost:3000/api/health
