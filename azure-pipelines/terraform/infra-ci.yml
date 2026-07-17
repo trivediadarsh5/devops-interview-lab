@@ -13,11 +13,11 @@ variables:
   workingDirectory: terraform
   serviceConnection: terraform-service-con
 
-#==========================
-# VALIDATE
-#==========================
-
 stages:
+
+#=====================================
+# VALIDATE
+#=====================================
 
 - stage: Validate
   displayName: Terraform Validate
@@ -43,19 +43,17 @@ stages:
         inlineScript: |
           terraform init
 
-    - script: |
-        terraform fmt -check -recursive
+    - script: terraform fmt -check -recursive
       workingDirectory: $(workingDirectory)
       displayName: Terraform Format Check
 
-    - script: |
-        terraform validate
+    - script: terraform validate
       workingDirectory: $(workingDirectory)
       displayName: Terraform Validate
 
-#==========================
+#=====================================
 # PLAN
-#==========================
+#=====================================
 
 - stage: Plan
   displayName: Terraform Plan
@@ -83,9 +81,15 @@ stages:
           terraform init
           terraform plan -out=tfplan
 
-#==========================
+    - task: PublishPipelineArtifact@1
+      displayName: Publish Terraform Plan
+      inputs:
+        targetPath: '$(workingDirectory)/tfplan'
+        artifact: tfplan
+
+#=====================================
 # APPLY
-#==========================
+#=====================================
 
 - stage: Apply
   displayName: Terraform Apply
@@ -110,6 +114,12 @@ stages:
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: latest
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download Terraform Plan
+            inputs:
+              artifact: tfplan
+              path: $(workingDirectory)
 
           - task: AzureCLI@2
             displayName: Terraform Apply
