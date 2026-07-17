@@ -46,31 +46,33 @@ stages:
         PathtoPublish: backend
         ArtifactName: backend-artifact
 
-
 #=========================================
 # DEPLOY
 #=========================================
 
 - stage: Deploy
-
+  displayName: Deploy Backend
   dependsOn: Build
 
   jobs:
 
   - deployment: DeployBackend
-
+    displayName: Deploy Backend
     environment: Production
 
     strategy:
-
       runOnce:
-
         deploy:
 
           steps:
 
+          - download: none
+
           - task: DownloadBuildArtifacts@0
+            displayName: Download Backend Artifact
             inputs:
+              buildType: current
+              downloadType: single
               artifactName: backend-artifact
               downloadPath: $(Pipeline.Workspace)
 
@@ -80,6 +82,8 @@ stages:
               sshEndpoint: $(sshServiceConnection)
               sourceFolder: $(Pipeline.Workspace)/backend-artifact
               targetFolder: /home/azureuser/devops-interview-lab/backend
+              cleanTargetFolder: false
+              overwrite: true
 
           - task: SSH@0
             displayName: Deploy Backend
@@ -87,12 +91,31 @@ stages:
               sshEndpoint: $(sshServiceConnection)
               runOptions: inline
               inline: |
+                set -e
+
                 cd /home/azureuser/devops-interview-lab/backend
 
                 npm install
 
-                pm2 restart backend || pm2 start app.js --name backend
+                if pm2 describe backend >/dev/null 2>&1; then
+                  echo "Restarting existing PM2 process..."
+                  pm2 restart backend
+                else
+                  echo "Starting new PM2 process..."
+                  pm2 start app.js --name backend
+                fi
 
                 pm2 save
 
-                curl http://localhost:3000/api/health
+                echo "Waiting for application..."
+                sleep 10
+
+                echo "Running Health Check..."
+
+                RESPONSE=$(curl -fsS http://localhost:3000/api/health)
+
+                echo "$RESPONSE"
+
+                echo "$RESPONSE" | grep '"status":"UP"'
+
+                echo "Backend deployed successfully."
