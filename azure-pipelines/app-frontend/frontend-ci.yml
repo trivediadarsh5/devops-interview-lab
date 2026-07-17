@@ -47,10 +47,18 @@ stages:
         npm run build
       displayName: Build React App
 
+    - script: |
+        echo "Listing frontend folder..."
+        ls -la frontend
+
+        echo "Listing dist folder..."
+        ls -la frontend/dist
+      displayName: Verify Build Output
+
     - task: PublishBuildArtifacts@1
       displayName: Publish React Artifact
       inputs:
-        PathtoPublish: frontend/build
+        PathtoPublish: frontend/dist
         ArtifactName: react-build
         publishLocation: Container
 
