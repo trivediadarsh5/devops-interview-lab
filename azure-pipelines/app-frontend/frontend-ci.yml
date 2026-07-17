@@ -109,32 +109,41 @@ stages:
               inline: |
                 set -e
 
-                echo "Cleaning existing website..."
+                echo "Creating web root..."
+                sudo mkdir -p /var/www/html
+
+                echo "Cleaning old website..."
                 sudo rm -rf /var/www/html/*
 
-                echo "Copying frontend to nginx..."
+                echo "Copying new build..."
                 sudo cp -r /home/azureuser/frontend/* /var/www/html/
 
                 echo "Fixing ownership..."
                 sudo chown -R www-data:www-data /var/www/html
 
-                echo "Setting permissions..."
+                echo "Fixing permissions..."
                 sudo find /var/www/html -type d -exec chmod 755 {} \;
                 sudo find /var/www/html -type f -exec chmod 644 {} \;
 
-                echo "Testing nginx..."
-                sudo nginx -t
+                echo "Testing Nginx..."
+                sudo nginx -t >/dev/null 2>&1
 
-                echo "Reloading nginx..."
+                echo "Reloading Nginx..."
                 sudo systemctl reload nginx
 
-                echo "Waiting..."
+                echo "Waiting for service..."
                 sleep 5
 
-                echo "Checking nginx..."
+                echo "Checking Nginx status..."
                 sudo systemctl is-active nginx
 
-                echo "Running Health Check..."
-                curl -fsS http://localhost > /dev/null
+                echo "Running Frontend Health Check..."
+
+                HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost)
+
+                if [ "$HTTP_STATUS" != "200" ]; then
+                  echo "Frontend Health Check Failed. HTTP Status: $HTTP_STATUS"
+                  exit 1
+                fi
 
                 echo "Frontend deployed successfully."
