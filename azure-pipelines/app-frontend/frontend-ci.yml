@@ -4,7 +4,8 @@ trigger:
       - main
   paths:
     include:
-      - frontend/*
+      - frontend/**
+      - azure-pipelines/app-frontend/**
 
 pool:
   vmImage: ubuntu-latest
@@ -20,63 +21,77 @@ stages:
 #=========================================
 
 - stage: Build
+  displayName: Build Frontend
 
   jobs:
 
-  - job: Build
+  - job: BuildFrontend
+    displayName: Build React Application
 
     steps:
 
     - checkout: self
 
     - task: NodeTool@0
+      displayName: Install NodeJS
       inputs:
         versionSpec: $(nodeVersion)
 
     - script: |
         cd frontend
         npm ci
+      displayName: Install Dependencies
+
+    - script: |
+        cd frontend
         npm run build
       displayName: Build React App
 
     - task: PublishBuildArtifacts@1
+      displayName: Publish React Artifact
       inputs:
         PathtoPublish: frontend/build
         ArtifactName: react-build
-
+        publishLocation: Container
 
 #=========================================
 # DEPLOY
 #=========================================
 
 - stage: Deploy
-
+  displayName: Deploy Frontend
   dependsOn: Build
 
   jobs:
 
   - deployment: DeployFrontend
-
+    displayName: Deploy React to Production
     environment: Production
 
     strategy:
-
       runOnce:
-
         deploy:
 
           steps:
 
+          - download: none
+
           - task: DownloadBuildArtifacts@0
+            displayName: Download React Artifact
             inputs:
+              buildType: current
+              downloadType: single
               artifactName: react-build
               downloadPath: $(Pipeline.Workspace)
 
           - task: CopyFilesOverSSH@0
+            displayName: Copy React Build
             inputs:
               sshEndpoint: $(sshServiceConnection)
               sourceFolder: $(Pipeline.Workspace)/react-build
               targetFolder: /var/www/html
+              cleanTargetFolder: true
+              overwrite: true
 
           - task: SSH@0
             displayName: Reload Nginx
@@ -84,5 +99,21 @@ stages:
               sshEndpoint: $(sshServiceConnection)
               runOptions: inline
               inline: |
+                set -e
+
+                echo "Testing Nginx configuration..."
                 sudo nginx -t
+
+                echo "Reloading Nginx..."
                 sudo systemctl reload nginx
+
+                echo "Waiting for Nginx..."
+                sleep 5
+
+                echo "Checking Nginx Status..."
+                sudo systemctl is-active nginx
+
+                echo "Running Frontend Health Check..."
+                curl -fsS http://localhost > /dev/null
+
+                echo "Frontend deployed successfully."
